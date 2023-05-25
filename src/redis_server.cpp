@@ -11,7 +11,6 @@
 void do_something(int conn_fd);
 
 int main() {
-    std::cout << "hello\n";
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd <= 0) {
         std::cerr << "socket() failed: " << strerror(errno);
@@ -21,17 +20,16 @@ int main() {
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
-    addr.sin_port = ntohs(1234);
+    addr.sin_port = ntohs(8080);
     addr.sin_addr.s_addr = ntohl(0);
     int rv = bind(fd, (const sockaddr *)&addr, sizeof(addr));
     if (rv) {
-        std::cerr << "bind() failed: " << strerror(errno);
+        std::cerr << "bind() failed: " << strerror(errno) << std::endl;
         return 1;
     }
-    std::cout << "bound\n";
     rv = listen(fd, SOMAXCONN);
     if (rv) {
-        std::cerr << "listen() failed: " << strerror(errno);
+        std::cerr << "listen() failed: " << strerror(errno) << std::endl;
         return 1;
     }
     std::cout << "listening...\n";
@@ -58,7 +56,6 @@ void do_something(int client_fd) {
         return;
     }
     std::string msg(buf.data());
-    std::cout << "client says: " << msg << std::endl;
     msg.insert(0, "ECHO: ");
     write(client_fd, msg.c_str(), msg.length());
 }

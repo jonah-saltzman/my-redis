@@ -1,19 +1,22 @@
 #!/bin/bash
 
-# Function to stop server
 function stop_server {
-    echo "Caught SIGTERM signal! Stopping server..."
-    kill $server_pid
+    kill "$server_pid"
+    exit 0
 }
 
-# Start the server in the background
+function handle_interrupt {
+    stop_server
+}
+
 ./bin/redis_server &
 server_pid=$!
 
-echo "Server started pid=$server_pid"
+sleep 0.1
 
-# Stop server on SIGTERM
+trap handle_interrupt SIGINT
 trap stop_server SIGTERM
 
-# Start the client
 ./bin/redis_client
+
+stop_server

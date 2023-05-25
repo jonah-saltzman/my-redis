@@ -18,7 +18,9 @@ ENV CXX=aarch64-linux-gnu-g++
 
 # Run the make command to compile the application
 RUN make clean && make
-RUN ls bin/
+
+# Make the script executable
+RUN chmod +x start.sh
 
 # Command to run when the container starts
-CMD ["./bin/redis_server"]
+CMD ["./start.sh"]

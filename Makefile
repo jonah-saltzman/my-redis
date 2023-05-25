@@ -20,19 +20,19 @@ SRCS = $(wildcard $(SRC_DIR)/*.cpp)
 # Create the same structure for the obj files
 OBJS = $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 
-PROG_NAME = redis_server
+PROG_NAMES = redis_server redis_client
 
-# The executable to create
-TARGET = $(BIN_DIR)/$(PROG_NAME)
+# The executables to create
+TARGETS = $(addprefix $(BIN_DIR)/,$(PROG_NAMES))
 
 # Docker image name
-DOCKER_IMG = $(PROG_NAME)
+DOCKER_IMG = redis_app
 
 .PHONY: clean all docker
 
-all: $(TARGET)
+all: $(TARGETS)
 
-$(TARGET): $(OBJS)
+$(BIN_DIR)/%: $(OBJ_DIR)/%.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
@@ -43,4 +43,4 @@ docker:
 	docker run --rm $(DOCKER_IMG)
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f $(addsuffix .o,$(addprefix $(OBJ_DIR)/,$(PROG_NAMES))) $(TARGETS)

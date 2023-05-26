@@ -1,5 +1,7 @@
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <stdexcept>
 #include <string>
 #include <vector>
 #include <iostream>
@@ -7,6 +9,9 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <cerrno>
+#include <iostream>
+#include <cstring>
+#include "stream_io.hh"
 
 void do_something(int conn_fd);
 
@@ -41,21 +46,40 @@ int main() {
             std::cerr << "accept() failed: " << strerror(errno);
             continue;
         }
-        do_something(client_fd);
+        while (true) {
+            try {
+                do_something(client_fd);
+            } catch (std::runtime_error& e) {
+                std::cerr << e.what() << std::endl;
+                break;
+            }
+        }
         close(client_fd);
     }
     return 0;
 }
 
 void do_something(int client_fd) {
-    size_t buf_size = 64;
-    std::vector<char> buf(buf_size);
-    ssize_t n = read(client_fd, buf.data(), buf_size);
-    if (n < 0) {
-        std::cerr << "read() err" << std::endl;
-        return;
-    }
-    std::string msg(buf.data());
-    msg.insert(0, "ECHO: ");
-    write(client_fd, msg.c_str(), msg.length());
+    // get length header
+    std::uint32_t len;
+    std::vector<char> buf = read_bytes(client_fd, sizeof(len));
+    memcpy(&len, buf.data(), sizeof(len));
+
+    // read payload
+    buf = read_bytes(client_fd, len);
+
+    // compose reply
+    std::string_view recv(buf.data(), buf.size());
+    std::string reply("ECHO: ");
+    reply.append(recv.begin(), recv.end());
+
+    // send reply header
+    buf = std::vector<char>(sizeof(len));
+    len = reply.length();
+    memcpy(buf.data(), &len, sizeof(len));
+    write_bytes(client_fd, buf);
+
+    // send reply
+    std::vector<char>& reply_vec = reinterpret_cast<std::vector<char>&>(reply);
+    write_bytes(client_fd, reply_vec);
 }

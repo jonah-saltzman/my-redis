@@ -1,39 +1,51 @@
-#include <stdio.h>
-#include <string.h>
+#include <iostream>
+#include <vector>
+#include <string>
+#include <cstring>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <errno.h>
+#include <sys/types.h>
+#include <cstdint>
+#include "stream_io.hh"
+
 
 int main() {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
-        printf("socket() failed: %s\n", strerror(errno));
+        std::cerr << "socket() failed: " << strerror(errno) << std::endl;
         return 1;
     }
-
-    struct sockaddr_in addr = {};
+    struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(8080);
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);  // 127.0.0.1
-    int rv = connect(fd, (const struct sockaddr *)&addr, sizeof(addr));
-    if (rv) {
-        printf("connect() failed: %s\n", strerror(errno));
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);  // replace with server's IP if not localhost
+    int rv = connect(fd, (const sockaddr*)&addr, sizeof(addr));
+    if (rv < 0) {
+        std::cerr << "connect() failed: " << strerror(errno) << std::endl;
         return 1;
     }
+    std::string line;
+    while (std::getline(std::cin, line)) {
+        // send message size
+        std::uint32_t len = line.length();
+        std::vector<char> buf(sizeof(len));
+        memcpy(buf.data(), &len, sizeof(len));
+        write_bytes(fd, buf);
 
-    char msg[64];
-    while (fgets(msg, sizeof(msg), stdin) != NULL) {
-        write(fd, msg, strlen(msg));
+        // send message
+        std::vector<char> msg(line.begin(), line.end());
+        write_bytes(fd, msg);
 
-        char rbuf[64] = {};
-        ssize_t n = read(fd, rbuf, sizeof(rbuf) - 1);
-        if (n < 0) {
-            printf("read() failed: %s\n", strerror(errno));
-            close(fd);
-            return 1;
-        }
-        printf("%s\n", rbuf);
+        // read reply size
+        buf = read_bytes(fd, sizeof(len));
+        memcpy(&len, buf.data(), sizeof(len));
+
+        // read reply
+        buf = read_bytes(fd, len);
+
+        std::string reply(buf.begin(), buf.end());
+        std::cout << reply << std::endl;
     }
     close(fd);
     return 0;

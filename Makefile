@@ -12,7 +12,7 @@ OBJ_DIR = ./obj
 BIN_DIR = ./bin
 
 # Specify flags for the compiler
-CXXFLAGS = -Wall -std=c++14 -I$(INC_DIR)
+CXXFLAGS = -Wall -std=c++20 -I$(INC_DIR)
 
 # Get all the source files
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)

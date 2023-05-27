@@ -16,7 +16,7 @@
 
 void do_something(int conn_fd);
 
-int main() {
+int start_server(std::uint32_t port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd <= 0) {
         std::cerr << "socket() failed: " << strerror(errno);
@@ -26,7 +26,7 @@ int main() {
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
-    addr.sin_port = ntohs(8080);
+    addr.sin_port = ntohs(port);
     addr.sin_addr.s_addr = ntohl(0);
     int rv = bind(fd, (const sockaddr *)&addr, sizeof(addr));
     if (rv) {
@@ -38,7 +38,7 @@ int main() {
         std::cerr << "listen() failed: " << strerror(errno) << std::endl;
         return 1;
     }
-    std::cout << "listening...\n";
+    std::cout << fmt::format("listening on port {}\n", port);
     while (true) {
         struct sockaddr_in client;
         socklen_t socklen = sizeof(client);

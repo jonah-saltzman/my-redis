@@ -10,7 +10,7 @@
 #include "stream_io.hh"
 #include <fmt/format.h>
 
-int main() {
+int start_client(std::uint32_t port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
         std::cerr << "socket() failed: " << strerror(errno) << std::endl;
@@ -18,7 +18,7 @@ int main() {
     }
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(8080);
+    addr.sin_port = htons(port);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);  // replace with server's IP if not localhost
     int rv = connect(fd, (const sockaddr*)&addr, sizeof(addr));
     if (rv < 0) {

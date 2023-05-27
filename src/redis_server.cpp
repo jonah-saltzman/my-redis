@@ -12,6 +12,7 @@
 #include <iostream>
 #include <cstring>
 #include "stream_io.hh"
+#include <fmt/format.h>
 
 void do_something(int conn_fd);
 
@@ -50,7 +51,7 @@ int main() {
             try {
                 do_something(client_fd);
             } catch (std::runtime_error& e) {
-                std::cerr << e.what() << std::endl;
+                std::cerr << fmt::format("do_something: {}\n", e.what());
                 break;
             }
         }
@@ -64,10 +65,10 @@ void do_something(int client_fd) {
     std::uint32_t len;
     std::vector<char> buf = read_bytes(client_fd, sizeof(len));
     memcpy(&len, buf.data(), sizeof(len));
-
+    //std::cerr << fmt::format("do_something recv msg len {}\n", len);
     // read payload
     buf = read_bytes(client_fd, len);
-
+    //std::cerr << fmt::format("msg: {}\n", buf.data());
     // compose reply
     std::string_view recv(buf.data(), buf.size());
     std::string reply("ECHO: ");
@@ -77,9 +78,11 @@ void do_something(int client_fd) {
     buf = std::vector<char>(sizeof(len));
     len = reply.length();
     memcpy(buf.data(), &len, sizeof(len));
+    //std::cerr << fmt::format("sending reply header={}\n", *((std::uint32_t*)buf.data()));
     write_bytes(client_fd, buf);
 
     // send reply
-    std::vector<char>& reply_vec = reinterpret_cast<std::vector<char>&>(reply);
+    //std::cerr << fmt::format("sending reply (len={}): {}\n", reply.length(), reply.data());
+    std::vector<char> reply_vec = std::vector<char>(reply.begin(), reply.end());
     write_bytes(client_fd, reply_vec);
 }

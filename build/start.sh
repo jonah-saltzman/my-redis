@@ -9,14 +9,14 @@ function handle_interrupt {
     stop_server
 }
 
-./bin/redis_server &
+./redis_server &
 server_pid=$!
 
-sleep 0.1
+sleep 0.2
 
 trap handle_interrupt SIGINT
 trap stop_server SIGTERM
 
-./bin/redis_client
+./redis_client
 
 stop_server

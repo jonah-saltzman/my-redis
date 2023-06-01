@@ -7,7 +7,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <fmt/format.h>
-
+#include <fcntl.h>
 #include <iostream>
 
 std::vector<char> read_bytes(int fd, std::size_t bytes) {
@@ -46,5 +46,19 @@ void write_bytes(int fd, std::vector<char>& buf) {
         } else {
             total_bytes_written += bytes_written;
         }
+    }
+}
+
+void fd_set_nb(int fd) {
+    errno = 0;
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (errno != 0) {
+        throw std::runtime_error(fmt::format("fcntl failed: {}", strerror(errno)));
+    }
+    flags |= O_NONBLOCK;
+    errno = 0;
+    (void)fcntl(fd, F_SETFL, flags);
+    if (errno != 0) {
+        throw std::runtime_error(fmt::format("fcntl failed: {}", strerror(errno)));
     }
 }

@@ -8,7 +8,8 @@
 int main(int argc, char* argv[]) {
     try {
         std::uint16_t port = argc == 2 ? std::stoi(argv[1]) : 8080;
-        start_client(port);
+        std::string ip("127.0.0.1");
+        start_client(port, ip);
     } catch (const std::exception& e) {
         std::cerr << fmt::format("Exception: {}\n", e.what());
     } catch (...) {

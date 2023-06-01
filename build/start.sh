@@ -8,7 +8,7 @@ function stop_server {
 ./redis_server &
 server_pid=$!
 
-sleep 0.3
+sleep 1
 
 trap stop_server SIGINT
 trap stop_server SIGTERM

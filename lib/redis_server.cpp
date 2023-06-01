@@ -9,17 +9,16 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <cerrno>
 #include <iostream>
 #include <cstring>
 #include <fmt/format.h>
 #include <poll.h>
 
-#include "stream_io.hh"
-#include "connection.hh"
 #include "redis_server.hh"
 
-void do_something(int conn_fd);
+void fd_set_nb(int fd);
 
 RedisServer::RedisServer(std::string& _ip, uint16_t _port): ip(_ip), port(_port) {}
 
@@ -36,20 +35,24 @@ void RedisServer::start() {
     }
     int val = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
-    struct sockaddr_in addr;
+    sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = ntohs(port);
-    addr.sin_addr.s_addr = ntohl(0);
-    int rv = bind(fd, (const sockaddr *)&addr, sizeof(addr));
-    if (rv) {
+    int r = inet_pton(AF_INET, ip.c_str(), &(addr.sin_addr));
+    if (r != 1) {
+        throw std::runtime_error(fmt::format("invalid ip: {}", ip));
+    }
+    r = bind(fd, (const sockaddr *)&addr, sizeof(addr));
+    if (r) {
         throw std::runtime_error(fmt::format("failed to bind to {}:{}: {}", addr.sin_addr.s_addr, addr.sin_port, strerror(errno)));
     }
-    rv = listen(fd, SOMAXCONN);
-    if (rv) {
+    r = listen(fd, SOMAXCONN);
+    if (r) {
         throw std::runtime_error(fmt::format("listen failed: {}", strerror(errno)));
     }
     fd_set_nb(fd);
     std::cout << fmt::format("listening on port {}\n", port);
+    start_listen();
 }
 
 void RedisServer::start_listen() {
@@ -58,31 +61,33 @@ void RedisServer::start_listen() {
         pollfd pfd = {listener_fd, POLLIN, 0};
         poll_args.push_back(pfd);
 
-        for (std::pair<const int, Connection>& pair : conns) {
+        for (std::pair<const int, Connection>& pair : clients) {
             if (!pair.second.is_connected()) {
                 continue;
             }
             pollfd pfd = pair.second.get_pfd();
             poll_args.push_back(pfd);
         }
-
+        //std::cout << fmt::format("polling; poll args len: {}\npfd[0] fd={}\n", poll_args.size(), poll_args[0].fd);
         int n = poll(poll_args.data(), (nfds_t)poll_args.size(), 1000);
 
+        std::cout << fmt::format("poll_args[0].revents={}\n", poll_args[0].revents);
         if (n < 0) {
             throw std::runtime_error(fmt::format("poll err: {}", strerror(errno)));
         }
 
         for (size_t i = 1; i < poll_args.size(); ++i) {
             if (poll_args[i].revents) {
-                Connection& conn = conns[poll_args[i].fd];
-                // do some IO
+                Connection& conn = clients.at(poll_args[i].fd);
+                handle_connection(conn);
                 if (conn.get_state() == Connection::STATE_END) {
-                    conns.erase(poll_args[i].fd);
+                    clients.erase(poll_args[i].fd);
                 }
             }
         }
 
         if (poll_args[0].revents) {
+            std::cout << "accept connection\n";
             accept_connection();
         }
     }
@@ -93,42 +98,42 @@ void RedisServer::accept_connection() {
     socklen_t socklen = sizeof(client);
     int client_fd = accept(listener_fd, (sockaddr *)&client, &socklen);
     if (client_fd < 0) {
-        std::cerr << fmt::format("failed to accept connection: {}\n", strerror(errno));
-        return;
+        throw std::runtime_error(fmt::format("failed to accept connection: {}\n", strerror(errno)));
     }
     fd_set_nb(client_fd);
     std::string ip(inet_ntoa(client.sin_addr));
     uint16_t port = ntohs(client.sin_port);
     Connection conn(ip, port, client_fd);
-    auto inserted = conns.insert({client_fd, std::move(conn)});
+    auto inserted = clients.insert({client_fd, std::move(conn)});
     if (!inserted.second) {
         throw std::runtime_error("duplicate FDs in accept_connection()");
     }
 }
 
-void do_something(int client_fd) {
-    // get length header
-    std::uint32_t len;
-    std::vector<char> buf = read_bytes(client_fd, sizeof(len));
-    memcpy(&len, buf.data(), sizeof(len));
-    //std::cerr << fmt::format("do_something recv msg len {}\n", len);
-    // read payload
-    buf = read_bytes(client_fd, len);
-    //std::cerr << fmt::format("msg: {}\n", buf.data());
-    // compose reply
-    std::string_view recv(buf.data(), buf.size());
-    std::string reply("ECHO: ");
-    reply.append(recv.begin(), recv.end());
+void RedisServer::handle_connection(Connection& conn) {
+    switch (conn.get_state()) {
+    case Connection::STATE_REQ:
+        conn.state_req();
+        break;
+    case Connection::STATE_RES:
+        conn.state_res();
+        break;
+    case Connection::STATE_END:
+        clients.erase(conn.get_fd());
+        break;
+    }
+}
 
-    // send reply header
-    buf = std::vector<char>(sizeof(len));
-    len = reply.length();
-    memcpy(buf.data(), &len, sizeof(len));
-    //std::cerr << fmt::format("sending reply header={}\n", *((std::uint32_t*)buf.data()));
-    write_bytes(client_fd, buf);
-
-    // send reply
-    //std::cerr << fmt::format("sending reply (len={}): {}\n", reply.length(), reply.data());
-    std::vector<char> reply_vec = std::vector<char>(reply.begin(), reply.end());
-    write_bytes(client_fd, reply_vec);
+void fd_set_nb(int fd) {
+    errno = 0;
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (errno != 0) {
+        throw std::runtime_error(fmt::format("fcntl failed: {}", strerror(errno)));
+    }
+    flags |= O_NONBLOCK;
+    errno = 0;
+    (void)fcntl(fd, F_SETFL, flags);
+    if (errno != 0) {
+        throw std::runtime_error(fmt::format("fcntl failed: {}", strerror(errno)));
+    }
 }

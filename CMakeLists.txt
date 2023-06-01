@@ -8,7 +8,7 @@ add_compile_options(-std=c++20)
 
 find_package(fmt CONFIG REQUIRED)
 
-add_library(core lib/stream_io.cpp)
+add_library(core lib/stream_io.cpp lib/connection.cpp)
 target_link_libraries(core PUBLIC fmt::fmt)
 target_include_directories(core PUBLIC include)
 

@@ -10,21 +10,25 @@
 #include "stream_io.hh"
 #include <fmt/format.h>
 
-int start_client(std::uint32_t port) {
+int start_client(std::uint32_t port, std::string ip) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
         std::cerr << "socket() failed: " << strerror(errno) << std::endl;
         return 1;
     }
-    struct sockaddr_in addr;
+    sockaddr_in addr;
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);  // replace with server's IP if not localhost
+    addr.sin_port = ntohs(port);
+    int r = inet_pton(AF_INET, ip.c_str(), &(addr.sin_addr));
+    if (r != 1) {
+        throw std::runtime_error(fmt::format("invalid ip: {}", ip));
+    }
     int rv = connect(fd, (const sockaddr*)&addr, sizeof(addr));
     if (rv < 0) {
         std::cerr << "connect() failed: " << strerror(errno) << std::endl;
         return 1;
     }
+    std::cout << "client connected\n";
     std::string line;
     while (std::getline(std::cin, line)) {
         try {

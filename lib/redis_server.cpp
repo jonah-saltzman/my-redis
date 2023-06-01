@@ -51,6 +51,7 @@ void RedisServer::start() {
         throw std::runtime_error(fmt::format("listen failed: {}", strerror(errno)));
     }
     fd_set_nb(fd);
+    listener_fd = fd;
     std::cout << fmt::format("listening on port {}\n", port);
     start_listen();
 }
@@ -68,10 +69,8 @@ void RedisServer::start_listen() {
             pollfd pfd = pair.second.get_pfd();
             poll_args.push_back(pfd);
         }
-        //std::cout << fmt::format("polling; poll args len: {}\npfd[0] fd={}\n", poll_args.size(), poll_args[0].fd);
         int n = poll(poll_args.data(), (nfds_t)poll_args.size(), 1000);
 
-        std::cout << fmt::format("poll_args[0].revents={}\n", poll_args[0].revents);
         if (n < 0) {
             throw std::runtime_error(fmt::format("poll err: {}", strerror(errno)));
         }
@@ -87,7 +86,6 @@ void RedisServer::start_listen() {
         }
 
         if (poll_args[0].revents) {
-            std::cout << "accept connection\n";
             accept_connection();
         }
     }
@@ -104,6 +102,7 @@ void RedisServer::accept_connection() {
     std::string ip(inet_ntoa(client.sin_addr));
     uint16_t port = ntohs(client.sin_port);
     Connection conn(ip, port, client_fd);
+    std::cerr << fmt::format("accepted {}\n", conn.client);
     auto inserted = clients.insert({client_fd, std::move(conn)});
     if (!inserted.second) {
         throw std::runtime_error("duplicate FDs in accept_connection()");
